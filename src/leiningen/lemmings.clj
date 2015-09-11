@@ -51,5 +51,7 @@
         (if (zero? status)
           (println "Tests succeeded!")
           (println "Tests failed!"))
+        (println "Dropping any transient repository changes...")
+        (u/git (u/repo-dir (:git r)) "reset" "--hard" "HEAD")
         (println)))
     (println "done")))

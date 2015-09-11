@@ -19,41 +19,53 @@
      (fn [d] (meta d))
      deps)))
 
+(defn discover-repos [repos]
+  (sh "rm" "-rf" "target")
+  (println "Discovered the following repositories:")
+  (println)
+  (doseq [r repos]
+    (println "- " (:git r))))
+
+(defn update-local-repos [repos]
+  (println)
+  (println "Cloning and updating local copies...")
+  (doseq [r repos]
+    (println "== " (:git r) " ==")
+    (u/clone-and-pull (:git r) (or (:branch r) "master"))))
+
+(defn advance-voom-dependencies [r]
+  (println "== " (:git r) " ==")
+  (doseq [v (tracked-by-voom (u/project-path r (u/repo-dir (:git r))))]
+    (println (meta v))
+    (println v)
+    (let [version (newest-version (first v))
+          project-file (u/project-path r (u/repo-dir (:git r)))]
+      (println "Latest version is: " version)
+      (println (format "Updating project file at %s..." project-file))
+      (d/update-dependency nil (str (first v)) version project-file))))
+
+(defn test-after-dep-update [project r]
+  (let [script (:test-script (:lemmings project))
+        test-file (format "%s/%s" (System/getProperty "user.dir") script)
+        status (:exit (sh test-file (u/repo-dir (:git r)) (:test-cmd r)))]
+    (if (zero? status)
+      (println "Tests succeeded!")
+      (println "Tests failed!"))
+    (println "Dropping any transient repository changes...")
+    (u/git (u/repo-dir (:git r)) "reset" "--hard" "HEAD")
+    (println)))
+
 (defn lemmings
   "Polls binary artifacts for automatic dependency updates."
   [project & args]
   (let [repos (:repos (:lemmings project))]
-    (println "Discovered the following repositories:")
-    (println)
-    (sh "rm" "-rf" "target")
+    (discover-repos repos)
     (while true
-      (doseq [r repos]
-        (println "- " (:git r)))
-      (println)
-      (println "Cloning and updating local copies...")
-      (doseq [r repos]
-        (println "== " (:git r) " ==")
-        (u/clone-and-pull (:git r) (or (:branch r) "master")))
+      (update-local-repos repos)
       (println "Finding :dependencies tracked by Voom...")
       (doseq [r repos]
-        (println "== " (:git r) " ==")
-        (doseq [v (tracked-by-voom (u/project-path r (u/repo-dir (:git r))))]
-          (println (meta v))
-          (println v)
-          (let [version (newest-version (first v))
-                project-file (u/project-path r (u/repo-dir (:git r)))]
-            (println "Latest version is: " version)
-            (println (format "Updating project file at %s..." project-file))
-            (d/update-dependency nil (str (first v)) version project-file)))
+        (advance-voom-dependencies r)
         (println "Finished updating dependencies. Testing...")
-        (let [script (:test-script (:lemmings project))
-              test-file (format "%s/%s" (System/getProperty "user.dir") script)
-              status (:exit (sh test-file (u/repo-dir (:git r)) (:test-cmd r)))]
-          (if (zero? status)
-            (println "Tests succeeded!")
-            (println "Tests failed!"))
-          (println "Dropping any transient repository changes...")
-          (u/git (u/repo-dir (:git r)) "reset" "--hard" "HEAD")
-          (println)))
+        (test-after-dep-update project r))
       (println "done, sleeping until next scheduled iteration")
       (Thread/sleep (:sleep (:lemmings project))))))

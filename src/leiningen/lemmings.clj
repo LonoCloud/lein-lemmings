@@ -1,13 +1,12 @@
 (ns leiningen.lemmings
-  (:require [leiningen.unison :as u]
+  (:require [clojure.java.shell :refer [sh]]
+            [leiningen.unison :as u]
             [leiningen.update-dependency :as d]
             [ancient-clj.core :as a]
             [rewrite-clj.zip :as z]))
 
 (defn newest-version [dep]
-  (first
-   (map :version-string
-        (a/versions! [dep]))))
+  (first (map :version-string (a/versions! dep))))
 
 (defn tracked-by-voom [p]
   (let [deps
@@ -26,6 +25,7 @@
   (let [repos (:repos (:lemmings project))]
     (println "Discovered the following repositories:")
     (println)
+    (sh "rm" "-rf" "target")
     (doseq [r repos]
       (println (:git r)))
     (println)
@@ -39,9 +39,17 @@
       (doseq [v (tracked-by-voom (u/project-path r (u/repo-dir (:git r))))]
         (println (meta v))
         (println v)
-        (let [version (newest-version (first v))]
+        (let [version (newest-version (first v))
+              project-file (u/project-path r (u/repo-dir (:git r)))]
           (println "Latest version is: " version)
-          (println "Updating project file...")
-          (d/update-dependency nil (str (first v)) version (u/project-path r (u/repo-dir (:git r)))))
+          (println (format "Updating project file at %s..." project-file))
+          (d/update-dependency nil (str (first v)) version project-file)))
+      (println "Finished updating dependencies. Testing...")
+      (let [script (:test-script (:lemmings project))
+            test-file (format "%s/%s" (System/getProperty "user.dir") script)
+            status (:exit (sh test-file (u/repo-dir (:git r)) (:test-cmd r)))]
+        (if (zero? status)
+          (println "Tests succeeded!")
+          (println "Tests failed!"))
         (println)))
     (println "done")))

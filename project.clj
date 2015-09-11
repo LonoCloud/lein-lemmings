@@ -7,9 +7,4 @@
                  [lein-update-dependency "0.1.2"]
                  [rewrite-clj "0.4.12"]
                  [ancient-clj "0.3.11"]]
-  :eval-in-leiningen true
-  :lemmings
-  {:repos
-   [{:git "git@github.com:onyx-platform/onyx-kafka.git" :branch "master"}
-    {:git "git@github.com:onyx-platform/onyx-datomic.git" :branch "master"}
-    {:git "git@github.com:onyx-platform/onyx-sql.git" :branch "master"}]})
+  :eval-in-leiningen true)

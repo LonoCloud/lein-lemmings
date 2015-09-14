@@ -47,10 +47,14 @@
 (defn test-after-dep-update [project r]
   (let [script (:test-script (:lemmings project))
         test-file (format "%s/%s" (System/getProperty "user.dir") script)
-        status (:exit (sh test-file (u/repo-dir (:git r)) (:test-cmd r)))]
-    (if (zero? status)
-      (println "Tests succeeded!")
-      (println "Tests failed!"))
+        project-file (or (:project-file r) "project.clj")
+        rets (sh test-file (u/repo-dir (:git r)) (:test-cmd r))]
+    (if (zero? (:exit rets))
+      (do (println "Tests succeeded. Pushing new versions...")
+          (u/git (u/repo-dir (:git r)) "add" project-file)
+          (u/git (u/repo-dir (:git r)) "commit" "-m" "Automatically updated Voom dependencies to latest.")
+          (u/git (u/repo-dir (:git r)) "push" "origin" (or (:branch r) "master")))
+      (println "Tests failed. Rolling back changes..."))
     (println "Dropping any transient repository changes...")
     (u/git (u/repo-dir (:git r)) "reset" "--hard" "HEAD")
     (println)))
